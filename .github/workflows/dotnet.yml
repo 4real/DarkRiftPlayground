@@ -47,6 +47,10 @@ jobs:
       uses: microsoft/setup-msbuild@v1.0.2
 
   test:
+    strategy:
+      matrix:
+        configuration: [Debug]
+  
     env:
       Solution_Name: DarkRift2.sln
       Test_Project_Path: DarkRift.Server.Testing/DarkRift.Testing.csproj
