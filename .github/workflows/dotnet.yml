@@ -49,12 +49,14 @@ jobs:
       
     # Ensure configuration builds
     - name: Build the configuration
-      run: dotnet build
+      run: dotnet build /p:Configuration=$env:Configuration
+      env:
+        Configuration: ${{ matrix.configuration }}
 
   test:
     strategy:
       matrix:
-        configuration: [Debug]
+        configuration: [Debug, Free, Pro]
         
     runs-on: windows-latest  # For a list of available runner types, refer to
                              # https://help.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idruns-on
@@ -84,4 +86,6 @@ jobs:
     
     # Execute all unit tests in the solution
     - name: Execute unit tests
-      run: dotnet test
+      run: dotnet test  /p:Configuration=$env:Configuration
+      env:
+        Configuration: ${{ matrix.configuration }}
