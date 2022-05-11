@@ -356,7 +356,7 @@ namespace DarkRift.Client
             if (Connection == null)
                 return false;
 
-            if (!Connection.Disconnect())
+            if (!Connection.Disconnect()
                 return false;
 
             Disconnected?.Invoke(this, new DisconnectedEventArgs(true, SocketError.Disconnecting, null));
