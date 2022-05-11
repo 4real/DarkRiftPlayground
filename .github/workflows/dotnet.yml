@@ -49,4 +49,4 @@ jobs:
 
     # Execute all unit tests in the solution
     - name: Execute unit tests
-      run: DRBuildMode=coreonly && dotnet test
+      run: Set "DRBuildMode=coreonly" && dotnet test
