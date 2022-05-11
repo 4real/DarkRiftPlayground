@@ -48,11 +48,9 @@ jobs:
 
   test:
     env:
+      Solution_Name: DarkRift2.sln
       Test_Project_Path: DarkRift.Server.Testing/DarkRift.Testing.csproj
       DRBuildMode: coreonly
-      
-    env:
-      Solution_Name: DarkRift2.sln
 
     steps:
     - name: Checkout
