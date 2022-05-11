@@ -52,7 +52,7 @@ jobs:
     env:
       Test_Project_Path: DarkRift.Server.Testing/DarkRift.Testing.csproj
       DRBuildMode: coreonly
-      
+    steps:
     # Execute all unit tests in the solution
     - name: Execute unit tests
       run: dotnet test
