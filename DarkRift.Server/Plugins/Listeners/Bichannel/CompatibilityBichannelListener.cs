@@ -107,39 +107,30 @@ namespace DarkRift.Server.Plugins.Listeners.Bichannel
             }
         }
 
-        private struct UdpSendOperation
-        {
-            public Action<int, SocketError> callback;
-            public MessageBuffer message;
-        }
-
         internal override bool SendUdpBuffer(EndPoint remoteEndPoint, MessageBuffer message, Action<int, SocketError> completed)
         {
-            UdpListener.BeginSendTo(message.Buffer, message.Offset, message.Count, SocketFlags.None, remoteEndPoint, UdpSendCompleted, new UdpSendOperation { callback = completed, message = message });
+            //disabling the DarkRift 2 BeginSendTo because
+            //A) Unity's GC sucks and SendTo creates marginally less garbage than BeginSendTo, although unfortunately not zero due to a bad Mono sockets implementation that allocates in IP address handling
+            //B) queued UDP operations are basically pointless from a realtime perspective (consider e.g. snapshots)
+            //C) unbounded buffers tend to blow up under stress
+            
+            using (message)
+            {
+                int bytesSent = 0;
+                SocketError result = SocketError.Success;
+                try
+                {
+                    bytesSent = UdpListener.SendTo(message.Buffer, message.Offset, message.Count, SocketFlags.None, remoteEndPoint);
+                }
+                catch (SocketException e)
+                {
+                    result = e.SocketErrorCode;
+                }
+
+                completed(bytesSent, result);
+            }
 
             return true;
-        }
-
-        private void UdpSendCompleted(IAsyncResult result)
-        {
-            UdpSendOperation operation = (UdpSendOperation)result.AsyncState;
-
-            int bytesSent;
-            try
-            {
-                bytesSent = UdpListener.EndSendTo(result);
-            }
-            catch (SocketException e)
-            {
-                operation.callback(0, e.SocketErrorCode);
-                return;
-            }
-            finally
-            {
-                operation.message.Dispose();
-            }
-
-            operation.callback(bytesSent, SocketError.Success);
         }
     }
 }
