@@ -51,6 +51,11 @@ namespace DarkRift
         public bool IsReadOnly { get; private set; }
 
         /// <summary>
+        /// We need a way to write header first to avoid making useless copies in ToBuffer.
+        /// </summary>
+        internal bool prewritten;
+
+        /// <summary>
         ///     Indicates whether this message is a command message or not.
         /// </summary>
         /// <exception cref="AccessViolationException">If the message is readonly.</exception>
@@ -143,7 +148,12 @@ namespace DarkRift
                 if (IsReadOnly)
                     throw new AccessViolationException("Message is read-only. This property can only be set when IsReadOnly is false. You may want to create a writable instance of this Message using Message.Clone().");
                 else
+                {
                     tag = value;
+
+                    if (prewritten)
+                        BigEndianHelper.WriteBytes(buffer.Buffer, buffer.Offset + 1, tag);
+                }
             }
         }
 
@@ -164,6 +174,73 @@ namespace DarkRift
         ///     Whether this message is currently in an object pool waiting or not.
         /// </summary>
         private volatile bool isCurrentlyLoungingInAPool;
+
+        /// <summary>
+        /// Gets the message buffer of a message created by CreateInline;
+        /// </summary>
+        /// <returns>The internal buffer.</returns>
+        public MessageBuffer GetInlineBuffer()
+        {
+            if (!prewritten)
+                throw new InvalidOperationException("Can only call " + nameof(GetInlineBuffer) + " on message created by " + nameof(CreateInline));
+
+            return (MessageBuffer)buffer;
+        }
+
+        /// <summary>
+        /// Creates a message for which you can directly write into a buffer accessible by GetInlineBuffer() without creating additional copies.
+        /// </summary>
+        /// <param name="tag">The tag the message has</param>
+        /// <param name="initialCapacity">Minimum capacity of buffer to hold user data in bytes.</param>
+        public static Message CreateInline(ushort tag, int initialCapacity)
+        {
+            //currently not supporting ping messages here
+
+            int headerLength = 3;
+            int totalLength = headerLength + initialCapacity;
+
+            var buffer = MessageBuffer.Create(totalLength);
+            buffer.Count = totalLength;
+
+            buffer.Buffer[buffer.Offset] = 0; //flags
+            BigEndianHelper.WriteBytes(buffer.Buffer, buffer.Offset + 1, tag);
+
+
+            Message message = ObjectCache.GetMessage();
+
+            message.prewritten = true;
+            message.isCurrentlyLoungingInAPool = false;
+            message.IsReadOnly = false;
+            message.buffer = buffer;
+            message.tag = tag;
+
+
+            return message;
+        }
+
+        /// <summary>
+        /// Resizes a message buffer created by CreateInline to contain at least minCapacity bytes for user data.
+        /// </summary>
+        /// <param name="minCapacity">Minimum capacity.</param>
+        public void ResizeInline(int minCapacity)
+        {
+            if (!prewritten)
+                throw new InvalidOperationException("Can only call " + nameof(ResizeInline) + " on message created by " + nameof(CreateInline));
+
+            int headerLength = 3;
+            minCapacity += headerLength;
+
+            var buffer = (MessageBuffer)this.buffer;
+
+            int totalCapacity = buffer.Buffer.Length;
+            if (totalCapacity < minCapacity)
+            {
+                while (totalCapacity < minCapacity)
+                    totalCapacity *= 2;
+
+                buffer.EnsureLength(totalCapacity);
+            }
+        }
 
         /// <summary>
         ///     Creates a new message with the given tag and an empty payload.
@@ -420,6 +497,12 @@ namespace DarkRift
         //TODO DR3 Make this return an IMessageBuffer
         internal MessageBuffer ToBuffer()
         {
+            if (prewritten)
+            {
+                IsReadOnly = true;
+                return (MessageBuffer)this.buffer.Clone(); //actually does refcounting and doesn't copy underlying buffer
+            }
+
             int headerLength = IsPingMessage || IsPingAcknowledgementMessage ? 5 : 3;
             int totalLength = headerLength + DataLength;
 
@@ -468,6 +551,7 @@ namespace DarkRift
         {
             buffer.Dispose();
 
+            prewritten = false;
             ObjectCache.ReturnMessage(this);
             isCurrentlyLoungingInAPool = true;
         }
